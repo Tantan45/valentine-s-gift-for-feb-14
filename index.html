@@ -33,8 +33,16 @@
         font-family: "Quicksand", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.8), transparent 45%),
-          radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.5), transparent 40%),
+          radial-gradient(
+            circle at 20% 20%,
+            rgba(255, 255, 255, 0.8),
+            transparent 45%
+          ),
+          radial-gradient(
+            circle at 80% 0%,
+            rgba(255, 255, 255, 0.5),
+            transparent 40%
+          ),
           linear-gradient(135deg, var(--bg-1), var(--bg-2));
         overflow-x: hidden;
         padding: 24px;
@@ -57,7 +65,11 @@
         position: absolute;
         width: 180px;
         height: 180px;
-        background: radial-gradient(circle, rgba(255, 59, 127, 0.25), transparent 70%);
+        background: radial-gradient(
+          circle,
+          rgba(255, 59, 127, 0.25),
+          transparent 70%
+        );
         border-radius: 50%;
         z-index: 0;
       }
@@ -167,7 +179,10 @@
         border-radius: 999px;
         cursor: pointer;
         box-shadow: 0 10px 25px rgba(255, 59, 127, 0.35);
-        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease,
+          background 0.2s ease;
       }
 
       button:hover {
@@ -178,6 +193,16 @@
 
       button:active {
         transform: translateY(1px) scale(0.99);
+      }
+
+      #closeBtn {
+        position: relative;
+        will-change: transform;
+        transition:
+          transform 120ms ease-out,
+          box-shadow 0.2s ease,
+          background 0.2s ease;
+        touch-action: manipulation;
       }
 
       .ghost {
@@ -251,6 +276,48 @@
         color: #5b4b60;
       }
 
+      @media (max-width: 520px) {
+        body {
+          padding: 16px;
+        }
+
+        .card {
+          padding: 28px 22px 24px;
+          border-radius: 20px;
+        }
+
+        p {
+          font-size: 1rem;
+        }
+
+        .overlay {
+          padding: 16px;
+        }
+
+        .modal {
+          padding: 18px;
+          border-radius: 18px;
+          max-height: calc(100vh - 32px);
+          max-height: calc(100dvh - 32px);
+          overflow: auto;
+        }
+
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .actions button {
+          width: 100%;
+        }
+
+        #closeBtn {
+          width: auto;
+          align-self: center;
+          min-width: 150px;
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .modal {
           transition: none;
@@ -261,11 +328,8 @@
   <body>
     <main class="card" aria-label="Valentine card">
       <div class="content">
-        <h1>Be My Valentine?</h1>
-        <p>
-          You make my days brighter, my laughs louder, and my heart lighter.
-          Here is a little digital hug wrapped up just for you.
-        </p>
+        <h1>Happy Valentine</h1>
+        <p>I have a special surprise for you.</p>
         <div class="heart-row" aria-hidden="true">
           <span class="heart"></span>
           <span class="heart"></span>
@@ -281,20 +345,32 @@
     </main>
 
     <div class="overlay" id="rickrollOverlay" aria-hidden="true">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rickrollTitle">
-        <h2 id="rickrollTitle">Rocking Chair Ghost</h2>
-        <p class="small">A spooky little surprise.</p>
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rickrollTitle"
+      >
+        <h2 id="rickrollTitle">It's a prank</h2>
+        <p class="small"></p>
         <div class="video-wrap">
           <iframe
             id="rickrollFrame"
             title="Rocking Chair Ghost"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="
+              accelerometer;
+              autoplay;
+              clipboard-write;
+              encrypted-media;
+              gyroscope;
+              picture-in-picture;
+            "
             allowfullscreen
           ></iframe>
         </div>
         <div class="actions center">
           <button id="closeBtn">Close</button>
-          <button class="ghost" id="openTabBtn">Open in New Tab</button>
         </div>
       </div>
     </div>
@@ -303,40 +379,151 @@
       const overlay = document.getElementById("rickrollOverlay");
       const rickrollBtn = document.getElementById("rickrollBtn");
       const closeBtn = document.getElementById("closeBtn");
-      const openTabBtn = document.getElementById("openTabBtn");
       const sweetBtn = document.getElementById("sweetBtn");
       const frame = document.getElementById("rickrollFrame");
       const modal = document.querySelector(".modal");
 
-      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const safeMatchMedia = (query) =>
+        typeof window.matchMedia === "function"
+          ? window.matchMedia(query).matches
+          : false;
+
+      const prefersReducedMotion = safeMatchMedia(
+        "(prefers-reduced-motion: reduce)",
+      );
       let jumpInterval = null;
+      let shakeInterval = null;
+      let shakeTimeout = null;
+      let modalTransitionBeforeShake = null;
+      let closeDodgeX = 0;
+      let closeDodgeY = 0;
 
-      const videoEmbed = "https://www.youtube.com/embed/qsJkFb7UW_g?autoplay=1&rel=0&playsinline=1";
-      const videoWatch = "https://youtu.be/qsJkFb7UW_g";
+      const YOUTUBE_VIDEO_ID = "qsJkFb7UW_g";
+      const YOUTUBE_START_SECONDS = 0;
+      const OPEN_VIDEO_IN_NEW_TAB = false;
+      const RESPECT_REDUCED_MOTION = true;
 
-      const centerModal = () => {
+      const YOUTUBE_EMBED_HOST = "https://www.youtube-nocookie.com";
+      const videoEmbedUrl = new URL(
+        `/embed/${YOUTUBE_VIDEO_ID}`,
+        YOUTUBE_EMBED_HOST,
+      );
+      videoEmbedUrl.searchParams.set("autoplay", "1");
+      videoEmbedUrl.searchParams.set("mute", "1");
+      videoEmbedUrl.searchParams.set("rel", "0");
+      videoEmbedUrl.searchParams.set("playsinline", "1");
+      if (YOUTUBE_START_SECONDS > 0) {
+        videoEmbedUrl.searchParams.set("start", String(YOUTUBE_START_SECONDS));
+      }
+      const videoEmbed = videoEmbedUrl.toString();
+
+      const videoWatch =
+        YOUTUBE_START_SECONDS > 0
+          ? `https://youtu.be/${YOUTUBE_VIDEO_ID}?t=${YOUTUBE_START_SECONDS}`
+          : `https://youtu.be/${YOUTUBE_VIDEO_ID}`;
+
+      const openVideoExternal = () => {
+        const win = window.open(videoWatch, "_blank", "noopener");
+        if (!win) {
+          window.location.href = videoWatch;
+        }
+      };
+
+      const motionOk = () => !RESPECT_REDUCED_MOTION || !prefersReducedMotion;
+
+      const closeOverlay = () => {
+        overlay.classList.remove("show");
+        overlay.setAttribute("aria-hidden", "true");
+        frame.src = "";
+        stopJumpscare();
+      };
+
+      const getModalEnv = () => {
+        const isTouch = safeMatchMedia("(pointer: coarse)");
+        const isSmall = safeMatchMedia("(max-width: 768px)");
+        const isShort = safeMatchMedia("(max-height: 640px)");
+        return { isTouch, isSmall, isShort };
+      };
+
+      const shouldJumpModal = () => {
+        const { isTouch, isSmall, isShort } = getModalEnv();
+        return motionOk() && !isTouch && !isSmall && !isShort;
+      };
+
+      const shouldShakeModal = () => {
+        const { isTouch, isSmall, isShort } = getModalEnv();
+        return motionOk() && (isTouch || isSmall || isShort);
+      };
+
+      const getCenteredCoords = () => {
         const x = Math.max(0, (window.innerWidth - modal.offsetWidth) / 2);
         const y = Math.max(0, (window.innerHeight - modal.offsetHeight) / 2);
+        return { x, y };
+      };
+
+      const centerModal = () => {
+        const { x, y } = getCenteredCoords();
         modal.style.transform = `translate(${x}px, ${y}px)`;
       };
 
       const moveModal = () => {
         const padding = 20;
-        const maxX = Math.max(0, window.innerWidth - modal.offsetWidth - padding * 2);
-        const maxY = Math.max(0, window.innerHeight - modal.offsetHeight - padding * 2);
+        const maxX = Math.max(
+          0,
+          window.innerWidth - modal.offsetWidth - padding * 2,
+        );
+        const maxY = Math.max(
+          0,
+          window.innerHeight - modal.offsetHeight - padding * 2,
+        );
         const x = Math.random() * maxX + padding;
         const y = Math.random() * maxY + padding;
         const rotate = (Math.random() * 8 - 4).toFixed(2);
         modal.style.transform = `translate(${x}px, ${y}px) rotate(${rotate}deg)`;
       };
 
-      const startJumpscare = () => {
-        if (prefersReducedMotion) {
+      const startPhoneShake = () => {
+        if (typeof navigator.vibrate === "function") {
+          navigator.vibrate([60, 30, 60]);
+        }
+
+        modalTransitionBeforeShake = modal.style.transition;
+        modal.style.transition = "none";
+
+        const { x, y } = getCenteredCoords();
+        const seq = [0, -22, 22, -16, 16, -10, 10, -6, 6, 0];
+        let i = 0;
+
+        modal.style.transform = `translate(${x}px, ${y}px)`;
+        shakeInterval = setInterval(() => {
+          const dx = seq[i] || 0;
+          modal.style.transform = `translate(${x + dx}px, ${y}px)`;
+          i += 1;
+
+          if (i >= seq.length) {
+            stopJumpscare();
+            centerModal();
+          }
+        }, 55);
+
+        shakeTimeout = setTimeout(() => {
+          stopJumpscare();
           centerModal();
+        }, 900);
+      };
+
+      const startJumpscare = () => {
+        stopJumpscare();
+        if (shouldJumpModal()) {
+          moveModal();
+          jumpInterval = setInterval(moveModal, 220);
           return;
         }
-        moveModal();
-        jumpInterval = setInterval(moveModal, 220);
+        if (shouldShakeModal()) {
+          startPhoneShake();
+          return;
+        }
+        centerModal();
       };
 
       const stopJumpscare = () => {
@@ -344,27 +531,129 @@
           clearInterval(jumpInterval);
           jumpInterval = null;
         }
-        modal.style.transform = "translate(0, 0)";
+        if (shakeInterval) {
+          clearInterval(shakeInterval);
+          shakeInterval = null;
+        }
+        if (shakeTimeout) {
+          clearTimeout(shakeTimeout);
+          shakeTimeout = null;
+        }
+        if (modalTransitionBeforeShake !== null) {
+          modal.style.transition = modalTransitionBeforeShake;
+          modalTransitionBeforeShake = null;
+        }
+      };
+
+      let closeFreakCount = 0;
+      let closePressTimer = null;
+
+      const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+      const resetCloseBtn = () => {
+        closeFreakCount = 0;
+        closeDodgeX = 0;
+        closeDodgeY = 0;
+        closeBtn.textContent = "Close";
+        closeBtn.style.transform = "";
+      };
+
+      const dodgeCloseBtn = (event) => {
+        const btnRect = closeBtn.getBoundingClientRect();
+        const modalRect = modal.getBoundingClientRect();
+        const padding = 14;
+
+        const minDeltaX = modalRect.left + padding - btnRect.left;
+        const maxDeltaX = modalRect.right - padding - btnRect.right;
+
+        const minDeltaY = modalRect.top + padding - btnRect.top;
+        const maxDeltaYModal = modalRect.bottom - padding - btnRect.bottom;
+        const maxDeltaY = maxDeltaYModal;
+
+        const btnCenterX = btnRect.left + btnRect.width / 2;
+        const direction =
+          event && typeof event.clientX === "number"
+            ? event.clientX < btnCenterX
+              ? 1
+              : -1
+            : Math.random() < 0.5
+              ? 1
+              : -1;
+
+        const desiredMag = 90 + Math.random() * 110;
+        let deltaX = clamp(direction * desiredMag, minDeltaX, maxDeltaX);
+
+        if (Math.abs(deltaX) < 18 && maxDeltaX > minDeltaX) {
+          deltaX = Math.random() * (maxDeltaX - minDeltaX) + minDeltaX;
+        }
+
+        let deltaY = 0;
+        if (maxDeltaY >= minDeltaY) {
+          const desiredY = Math.random() * 18 - 9;
+          deltaY = clamp(desiredY, minDeltaY, maxDeltaY);
+        }
+
+        closeDodgeX += deltaX;
+        closeDodgeY += deltaY;
+        closeBtn.style.transform = `translate3d(${closeDodgeX}px, ${closeDodgeY}px, 0)`;
+
+        if (typeof navigator.vibrate === "function") {
+          navigator.vibrate(20);
+        }
+      };
+
+      const startCloseLongPress = () => {
+        if (closePressTimer) clearTimeout(closePressTimer);
+        closePressTimer = setTimeout(() => {
+          closePressTimer = null;
+          closeOverlay();
+        }, 650);
+      };
+
+      const cancelCloseLongPress = () => {
+        if (!closePressTimer) return;
+        clearTimeout(closePressTimer);
+        closePressTimer = null;
       };
 
       const openScare = () => {
+        if (OPEN_VIDEO_IN_NEW_TAB) {
+          openVideoExternal();
+          return;
+        }
+        resetCloseBtn();
         overlay.classList.add("show");
         overlay.setAttribute("aria-hidden", "false");
         frame.src = videoEmbed;
-        startJumpscare();
+        setTimeout(startJumpscare, 0);
       };
 
       rickrollBtn.addEventListener("click", openScare);
 
-      closeBtn.addEventListener("click", () => {
-        overlay.classList.remove("show");
-        overlay.setAttribute("aria-hidden", "true");
-        frame.src = "";
-        stopJumpscare();
-      });
+      closeBtn.addEventListener("pointerdown", startCloseLongPress);
+      closeBtn.addEventListener("pointerup", cancelCloseLongPress);
+      closeBtn.addEventListener("pointercancel", cancelCloseLongPress);
+      closeBtn.addEventListener("touchend", cancelCloseLongPress);
+      closeBtn.addEventListener("touchcancel", cancelCloseLongPress);
+      closeBtn.addEventListener("mousedown", startCloseLongPress);
+      closeBtn.addEventListener("mouseup", cancelCloseLongPress);
+      closeBtn.addEventListener("mouseleave", cancelCloseLongPress);
 
-      openTabBtn.addEventListener("click", () => {
-        window.open(videoWatch, "_blank", "noopener");
+      closeBtn.addEventListener("click", (event) => {
+        if (!overlay.classList.contains("show")) return;
+
+        closeFreakCount += 1;
+
+        const phrases = ["Nope!", "Try again!", "Not yet!", "Hehe..."];
+        closeBtn.textContent = phrases[closeFreakCount % phrases.length];
+        const tapsToClose = Infinity;
+        if (closeFreakCount < tapsToClose) {
+          dodgeCloseBtn(event);
+          event.preventDefault();
+          return;
+        }
+
+        closeOverlay();
       });
 
       sweetBtn.addEventListener("click", () => {
@@ -376,17 +665,13 @@
 
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && overlay.classList.contains("show")) {
-          closeBtn.click();
+          closeOverlay();
         }
       });
 
       window.addEventListener("resize", () => {
         if (overlay.classList.contains("show")) {
-          if (prefersReducedMotion) {
-            centerModal();
-          } else {
-            moveModal();
-          }
+          startJumpscare();
         }
       });
     </script>
